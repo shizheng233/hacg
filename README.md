@@ -11,7 +11,8 @@ The Version will be same with upsteam.
 [![HACG](https://user-images.githubusercontent.com/4374375/33003955-f2ed932c-cdf8-11e7-961c-8a7a536e0fd5.png)](https://github.com/yueeng/hacg/releases/latest/download/app-release.apk)
 
 #### screenshot
-
-<img src="../hacg/sc/list.jpg" width="30%"/>
-<img src="../hacg/sc/content.jpg" width="30%"/>
-<img src="../hacg/sc/comment.jpg" width="30%"/>
+<div>
+  <img src="sc/list.jpg" width="30%"/>
+<img src="sc/content.jpg" width="30%"/>
+<img src="sc/comment.jpg" width="30%"/>
+</div>
