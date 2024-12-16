@@ -1,61 +1,49 @@
-package io.github.yueeng.hacg
+package io.github.yueeng.hacg.fragment
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Bundle
-import android.view.*
-import android.webkit.*
-import androidx.appcompat.app.AppCompatActivity
+import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.core.graphics.Insets
 import androidx.core.os.bundleOf
 import androidx.core.view.MenuProvider
+import androidx.core.view.OnApplyWindowInsetsListener
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
-import androidx.savedstate.SavedStateRegistryOwner
-import io.github.yueeng.hacg.databinding.ActivityWebBinding
+import io.github.yueeng.hacg.R
 import io.github.yueeng.hacg.databinding.FragmentWebBinding
+import io.github.yueeng.hacg.utils.HAcg
+import io.github.yueeng.hacg.utils.openUri
+import io.github.yueeng.hacg.utils.user
+import io.github.yueeng.hacg.viewmodels.WebViewModel
+import io.github.yueeng.hacg.viewmodels.factories.WebViewModelFactory
 
-class WebActivity : AppCompatActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(ActivityWebBinding.inflate(layoutInflater).also { binding ->
-            setSupportActionBar(binding.toolbar)
-            supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        }.root)
+class WebFragment : Fragment(), MenuProvider, View.OnLayoutChangeListener,
+    OnApplyWindowInsetsListener {
 
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.container, supportFragmentManager.findFragmentById(R.id.container)
-                ?.let { it as? WebFragment }
-                ?: WebFragment().arguments(intent.extras))
-            .commit()
-        addOnBackPressedCallback {
-            supportFragmentManager.findFragmentById(R.id.container)?.let { (it as? WebFragment)?.onBackPressed() } ?: false
-        }
+    private val viewModel: WebViewModel by viewModels {
+        WebViewModelFactory(
+            this,
+            bundleOf("url" to defuri)
+        )
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        android.R.id.home -> true.also {
-            onBackPressedDispatcher.onBackPressed()
-        }
-        else -> super.onOptionsItemSelected(item)
-    }
-}
-
-class WebViewModel(handle: SavedStateHandle, args: Bundle?) : ViewModel() {
-    val busy = handle.getLiveData("busy", false)
-    val uri = handle.getLiveData("url", args?.getString("url")!!)
-}
-
-class WebViewModelFactory(owner: SavedStateRegistryOwner, private val defaultArgs: Bundle? = null) : AbstractSavedStateViewModelFactory(owner, defaultArgs) {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(key: String, modelClass: Class<T>, handle: SavedStateHandle): T = WebViewModel(handle, defaultArgs) as T
-}
-
-class WebFragment : Fragment(), MenuProvider {
-    private val viewModel: WebViewModel by viewModels { WebViewModelFactory(this, bundleOf("url" to defuri)) }
+    private var _binding: FragmentWebBinding? = null
+    private var _insets: Insets? = null
 
     private val defuri: String
         get() = arguments?.takeIf { it.containsKey("url") }?.getString("url")
@@ -79,22 +67,53 @@ class WebFragment : Fragment(), MenuProvider {
         R.id.open -> true.also {
             activity?.openUri(viewModel.uri.value!!, true)
         }
+
         else -> false
     }
 
     override fun onViewCreated(view: View, state: Bundle?) {
         super.onViewCreated(view, state)
         requireActivity().addMenuProvider(this, viewLifecycleOwner, Lifecycle.State.RESUMED)
+        requireView().addOnLayoutChangeListener(this)
+        ViewCompat.setOnApplyWindowInsetsListener(requireView(),this)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         FragmentWebBinding.bind(requireView()).web.destroy()
+        _binding = null
+    }
+
+    override fun onLayoutChange(
+        v: View,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+        oldLeft: Int,
+        oldTop: Int,
+        oldRight: Int,
+        oldBottom: Int
+    ) {
+        v.removeOnLayoutChangeListener(this)
+        if (_insets == null) onApplyWindowInsets(v, ViewCompat.getRootWindowInsets(v) ?: return)
+    }
+
+    override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
+        val insetBar = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+        if (_insets == null) _insets = insetBar
+        _binding?.bottomBar?.updatePadding(bottom = insetBar.bottom)
+        return WindowInsetsCompat.CONSUMED
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
         val binding = FragmentWebBinding.inflate(inflater, container, false)
+        _binding = binding
         CookieManager.getInstance().acceptThirdPartyCookies(binding.web)
         viewModel.busy.observe(viewLifecycleOwner) { binding.swipe.isRefreshing = it }
         binding.swipe.setOnRefreshListener { binding.web.loadUrl(viewModel.uri.value!!) }
@@ -106,7 +125,10 @@ class WebFragment : Fragment(), MenuProvider {
         val back = binding.button2
         val fore = binding.button3
         binding.web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean =
                 activity?.openUri(request?.url?.toString(), false) == true
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -149,4 +171,5 @@ class WebFragment : Fragment(), MenuProvider {
         binding.web.loadUrl(viewModel.uri.value!!)
         return binding.root
     }
+
 }

@@ -1,18 +1,15 @@
 @file:Suppress("unused")
 
-package io.github.yueeng.hacg
+package io.github.yueeng.hacg.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
@@ -23,18 +20,17 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
 import android.text.style.ClickableSpan
-import android.text.style.ReplacementSpan
-import android.util.AttributeSet
-import android.view.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
-import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.IntentCompat
@@ -43,7 +39,6 @@ import androidx.core.os.BundleCompat
 import androidx.core.os.LocaleListCompat
 import androidx.core.text.HtmlCompat
 import androidx.core.view.children
-import androidx.core.view.descendants
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
@@ -53,8 +48,15 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingSource
 import androidx.preference.PreferenceManager
-import androidx.recyclerview.widget.*
-import androidx.viewpager2.widget.ViewPager2
+import androidx.recyclerview.widget.AdapterListUpdateCallback
+import androidx.recyclerview.widget.AsyncDifferConfig
+import androidx.recyclerview.widget.AsyncListDiffer
+import androidx.recyclerview.widget.ConcatAdapter
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.bumptech.glide.Glide
 import com.bumptech.glide.GlideBuilder
 import com.bumptech.glide.Registry
@@ -72,6 +74,12 @@ import com.github.clans.fab.FloatingActionMenu
 import com.google.android.material.snackbar.Snackbar
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import io.github.yueeng.hacg.BuildConfig
+import io.github.yueeng.hacg.HAcgApplication
+import io.github.yueeng.hacg.R
+import io.github.yueeng.hacg.activities.WebActivity
+import io.github.yueeng.hacg.activities.InfoActivity
+import io.github.yueeng.hacg.activities.ListActivity
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
@@ -81,7 +89,16 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.parcelize.Parcelize
-import okhttp3.*
+import okhttp3.Cache
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import okio.buffer
 import okio.sink
@@ -96,22 +113,29 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.text.ParseException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import java.util.Random
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.math.absoluteValue
-import kotlin.math.roundToInt
-import kotlin.math.sign
 
 
 fun debug(call: () -> Unit) {
     if (BuildConfig.DEBUG) call()
 }
 
+val SystemBarStyle.Companion.TRANSPARENT
+    get() = auto(
+        Color.TRANSPARENT,
+        Color.TRANSPARENT
+    )
+
 var user: Int
-    get() = PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance).getInt("user.id", 0)
-    set(value) = PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance).edit().putInt("user.id", value).apply()
+    get() = PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance)
+        .getInt("user.id", 0)
+    set(value) = PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance).edit()
+        .putInt("user.id", value).apply()
 
 val gson: Gson = GsonBuilder().create()
 val okhttp = OkHttpClient.Builder()
@@ -120,13 +144,25 @@ val okhttp = OkHttpClient.Builder()
     .readTimeout(30, TimeUnit.SECONDS)
     .cache(Cache(HAcgApplication.instance.cacheDir, 1024L * 1024L * 256L))
     .cookieJar(WebkitCookieJar(CookieManager.getInstance()))
-    .apply { debug { addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }) } }
+    .apply {
+        debug {
+            addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+            })
+        }
+    }
     .build()
 val okdownloader = OkHttpClient.Builder()
     .connectTimeout(10, TimeUnit.SECONDS)
     .cache(Cache(HAcgApplication.instance.cacheDir, 1024L * 1024L * 256L))
     .cookieJar(WebkitCookieJar(CookieManager.getInstance()))
-    .apply { debug { addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }) } }
+    .apply {
+        debug {
+            addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+            })
+        }
+    }
     .build()
 
 @GlideModule
@@ -137,28 +173,21 @@ class HacgAppGlideModule : AppGlideModule() {
     }
 
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
-        registry.replace(GlideUrl::class.java, InputStream::class.java, OkHttpUrlLoader.Factory(okhttp))
+        registry.replace(
+            GlideUrl::class.java,
+            InputStream::class.java,
+            OkHttpUrlLoader.Factory(okhttp)
+        )
     }
 }
 
 fun RequestBuilder<Drawable>.crossFade(): RequestBuilder<Drawable> =
     this.transition(DrawableTransitionOptions.withCrossFade())
 
-class HAcgApplication : Application() {
-    companion object {
-
-        private lateinit var _instance: HAcgApplication
-
-        val instance: HAcgApplication get() = _instance
-    }
-
-    init {
-        _instance = this
-    }
-}
-
 class WebkitCookieJar(private val cm: CookieManager) : CookieJar {
-    override fun loadForRequest(url: HttpUrl): List<Cookie> = cm.getCookie(url.toString())?.split("; ")?.mapNotNull { Cookie.parse(url, it) }?.toList() ?: emptyList()
+    override fun loadForRequest(url: HttpUrl): List<Cookie> =
+        cm.getCookie(url.toString())?.split("; ")?.mapNotNull { Cookie.parse(url, it) }?.toList()
+            ?: emptyList()
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cookies.forEach { cookie ->
@@ -167,20 +196,21 @@ class WebkitCookieJar(private val cm: CookieManager) : CookieJar {
     }
 }
 
-suspend fun <T> Call.await(action: (Call, Response) -> T): T = suspendCancellableCoroutine { continuation ->
-    continuation.invokeOnCancellation {
-        cancel()
-    }
-    enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            if (!continuation.isCancelled) continuation.resumeWithException(e)
+suspend fun <T> Call.await(action: (Call, Response) -> T): T =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation {
+            cancel()
         }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (!continuation.isCancelled) continuation.resumeWithException(e)
+            }
 
-        override fun onResponse(call: Call, response: Response) {
-            if (!continuation.isCancelled) continuation.resume(action(call, response))
-        }
-    })
-}
+            override fun onResponse(call: Call, response: Response) {
+                if (!continuation.isCancelled) continuation.resume(action(call, response))
+            }
+        })
+    }
 
 val datefmt get() = SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ssZZZZZ", LocaleListCompat.getDefault()[0])
 val datefmtcn get() = SimpleDateFormat("yyyy年MM月dd日 ahh:mm", LocaleListCompat.getDefault()[0])
@@ -205,25 +235,55 @@ val String.isWordpress
     }
 
 fun Context.openUri(url: String?, web: Boolean? = null): Boolean = when {
-    web == true -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    web == true -> startActivity(
+        Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse(url)
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+
     url.isNullOrEmpty() -> null
     !url.isWordpress -> Uri.parse(url).let { uri ->
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), uri.scheme))
+        startActivity(
+            Intent.createChooser(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), uri.scheme
+            )
+        )
     }
 
-    Article.getIdFromUrl(url) != null -> startActivity(Intent(this, InfoActivity::class.java).putExtra("url", url))
-    Article.isList(url) -> startActivity(Intent(this, ListActivity::class.java).putExtra("url", url))
+    Article.getIdFromUrl(url) != null -> startActivity(
+        Intent(
+            this,
+            InfoActivity::class.java
+        ).putExtra("url", url)
+    )
+
+    Article.isList(url) -> startActivity(
+        Intent(this, ListActivity::class.java).putExtra(
+            "url",
+            url
+        )
+    )
+
     web == null -> startActivity(Intent(this, WebActivity::class.java).putExtra("url", url))
     else -> null
 } != null
 
 val random = Random(System.currentTimeMillis())
 
-fun randomColor(alpha: Int = 0xFF): Int = android.graphics.Color.HSVToColor(alpha, arrayOf(random.nextInt(360).toFloat(), 1F, 0.5F).toFloatArray())
+fun randomColor(alpha: Int = 0xFF): Int = Color.HSVToColor(
+    alpha,
+    arrayOf(random.nextInt(360).toFloat(), 1F, 0.5F).toFloatArray()
+)
 
-fun Context.toast(msg: Int): Toast = Toast.makeText(this, msg, Toast.LENGTH_SHORT).also { it.show() }
+fun Context.toast(msg: Int): Toast =
+    Toast.makeText(this, msg, Toast.LENGTH_SHORT).also { it.show() }
 
-fun Context.toast(msg: String): Toast = Toast.makeText(this, msg, Toast.LENGTH_SHORT).also { it.show() }
+fun Context.toast(msg: String): Toast =
+    Toast.makeText(this, msg, Toast.LENGTH_SHORT).also { it.show() }
 
 fun Context.clipboard(label: String, text: String) {
     val clipboard = this.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -245,7 +305,7 @@ private class ViewChildrenRecursiveSequence(private val view: View) : Sequence<V
 
     private class RecursiveViewIterator(view: View) : Iterator<View> {
         private val sequences = arrayListOf(view.childrenSequence())
-        private var current = sequences.removeLast().iterator()
+        private var current = sequences.removeLastAlias().iterator()
 
         override fun next(): View {
             if (!hasNext()) throw NoSuchElementException()
@@ -258,13 +318,13 @@ private class ViewChildrenRecursiveSequence(private val view: View) : Sequence<V
 
         override fun hasNext(): Boolean {
             if (!current.hasNext() && sequences.isNotEmpty()) {
-                current = sequences.removeLast().iterator()
+                current = sequences.removeLastAlias().iterator()
             }
             return current.hasNext()
         }
 
         @Suppress("NOTHING_TO_INLINE")
-        private inline fun <T : Any> MutableList<T>.removeLast(): T {
+        private inline fun <T : Any> MutableList<T>.removeLastAlias(): T {
             if (isEmpty()) throw NoSuchElementException()
             return removeAt(size - 1)
         }
@@ -290,7 +350,8 @@ fun String.isImg(): Boolean = img.any { this.lowercase(Locale.getDefault()).ends
 
 suspend fun String.httpGetAwait(): Pair<String, String>? = try {
     val request = Request.Builder().get().url(this).build()
-    val (html, url) = okhttp.newCall(request).await { _, response -> response.body!!.string() to response.request.url.toString() }
+    val (html, url) = okhttp.newCall(request)
+        .await { _, response -> response.body!!.string() to response.request.url.toString() }
     if (url.startsWith(HAcg.wordpress)) {
         """"user_id":"(\d+)"""".toRegex().find(html)?.let {
             user = it.groups[1]?.value?.toIntOrNull() ?: 0
@@ -302,7 +363,9 @@ suspend fun String.httpGetAwait(): Pair<String, String>? = try {
 }
 
 suspend fun String.httpPostAwait(post: Map<String, String>): Pair<String, String>? = try {
-    val data = post.toList().fold(MultipartBody.Builder().setType(MultipartBody.FORM)) { b, o -> b.addFormDataPart(o.first, o.second) }.build()
+    val data = post.toList().fold(
+        MultipartBody.Builder().setType(MultipartBody.FORM)
+    ) { b, o -> b.addFormDataPart(o.first, o.second) }.build()
     val request = Request.Builder().url(this).post(data).build()
     val response = okhttp.newCall(request).await { _, response ->
         (response.body!!.string() to response.request.url.toString())
@@ -317,7 +380,10 @@ suspend fun String.httpDownloadAwait(file: String? = null): File? = try {
     okdownloader.newCall(request).await { _, response ->
         val target = if (file == null) {
             val path = response.request.url.toUri().path
-            File(HAcgApplication.instance.externalCacheDir, path.substring(path.lastIndexOf('/') + 1))
+            File(
+                HAcgApplication.instance.externalCacheDir,
+                path.substring(path.lastIndexOf('/') + 1)
+            )
         } else {
             File(file)
         }
@@ -333,7 +399,8 @@ suspend fun String.httpDownloadAwait(file: String? = null): File? = try {
 fun String.test(timeout: Int = 1000): Pair<Boolean, Int> = try {
     val uri = Uri.parse("https://$this")
     (Socket()).use { socket ->
-        val address = InetSocketAddress(InetAddress.getByName(uri.host), uri.port.takeIf { it > 0 } ?: 443)
+        val address =
+            InetSocketAddress(InetAddress.getByName(uri.host), uri.port.takeIf { it > 0 } ?: 443)
         val begin = System.currentTimeMillis()
         socket.connect(address, timeout)
         (socket.isConnected to (System.currentTimeMillis() - begin).toInt())
@@ -342,7 +409,8 @@ fun String.test(timeout: Int = 1000): Pair<Boolean, Int> = try {
     e.printStackTrace(); (false to 0)
 }
 
-val rmagnet = """(?<=[^\da-z])([a-z0-9]{40}|[a-z0-9]{32})(?=[^\da-z])""".toRegex(RegexOption.IGNORE_CASE)
+val rmagnet =
+    """(?<=[^\da-z])([a-z0-9]{40}|[a-z0-9]{32})(?=[^\da-z])""".toRegex(RegexOption.IGNORE_CASE)
 val rbaidu = """\b([a-z0-9]{8})\b\s+\b([a-z0-9]{4})\b""".toRegex(RegexOption.IGNORE_CASE)
 fun String.magnet(): Sequence<String> = rmagnet.findAll(this).map { it.value } +
         rbaidu.findAll(this).map { m -> "${m.groups[1]!!.value},${m.groups[2]!!.value}" }
@@ -366,22 +434,29 @@ fun Context.version(): Version? = runCatching { Version(BuildConfig.VERSION_NAME
 inline fun <reified T : View> View.findViewByViewType(id: Int = 0): Sequence<T> =
     this.childrenRecursiveSequence().mapNotNull { it as? T }.filter { id == 0 || id == it.id }
 
-fun Activity.snack(text: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar = this.window.decorView.let { view ->
-    view.findViewByViewType<CoordinatorLayout>().firstOrNull()
-        ?: view
-}.let { Snackbar.make(it, text, duration) }
+fun Activity.snack(text: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar =
+    this.window.decorView.let { view ->
+        view.findViewByViewType<CoordinatorLayout>().firstOrNull()
+            ?: view
+    }.let { Snackbar.make(it, text, duration) }
 
 fun Fragment.arguments(b: Bundle?): Fragment = this.also { it.arguments = b }
 
 fun Bundle.string(key: String, value: String): Bundle = this.also { it.putString(key, value) }
 
-fun Bundle.parcelable(key: String, value: Parcelable): Bundle = this.also { it.putParcelable(key, value) }
+fun Bundle.parcelable(key: String, value: Parcelable): Bundle =
+    this.also { it.putParcelable(key, value) }
 
-suspend fun <A, B> Iterable<A>.pmap(f: suspend (A) -> B): List<B> = coroutineScope { map { async { f(it) } }.awaitAll() }
+suspend fun <A, B> Iterable<A>.pmap(f: suspend (A) -> B): List<B> =
+    coroutineScope { map { async { f(it) } }.awaitAll() }
 
-abstract class DataAdapter<V, VH : RecyclerView.ViewHolder>(private val diffCallback: DiffUtil.ItemCallback<V>) : RecyclerView.Adapter<VH>() {
+abstract class DataAdapter<V, VH : RecyclerView.ViewHolder>(private val diffCallback: DiffUtil.ItemCallback<V>) :
+    RecyclerView.Adapter<VH>() {
     private val differ by lazy {
-        AsyncListDiffer(AdapterListUpdateCallback(this), AsyncDifferConfig.Builder(diffCallback).build())
+        AsyncListDiffer(
+            AdapterListUpdateCallback(this),
+            AsyncDifferConfig.Builder(diffCallback).build()
+        )
     }
     val data: List<V> get() = differ.currentList
     override fun getItemCount(): Int = differ.currentList.size
@@ -405,7 +480,8 @@ abstract class DataAdapter<V, VH : RecyclerView.ViewHolder>(private val diffCall
     open fun getItem(position: Int): V? = data[position]
 }
 
-abstract class PagingAdapter<V, VH : RecyclerView.ViewHolder>(diffCallback: DiffUtil.ItemCallback<V>) : DataAdapter<V, VH>(diffCallback) {
+abstract class PagingAdapter<V, VH : RecyclerView.ViewHolder>(diffCallback: DiffUtil.ItemCallback<V>) :
+    DataAdapter<V, VH>(diffCallback) {
     private val refreshCh = Channel<Boolean>()
     val refreshFlow = refreshCh.consumeAsFlow()
     val state = MutableLiveData<LoadState>()
@@ -457,7 +533,8 @@ abstract class LoadStateAdapter<VH : RecyclerView.ViewHolder> : RecyclerView.Ada
     abstract fun onCreateViewHolder(parent: ViewGroup, loadState: LoadState): VH
     abstract fun onBindViewHolder(holder: VH, loadState: LoadState)
     open fun getStateViewType(loadState: LoadState): Int = 0
-    open fun displayLoadStateAsItem(loadState: LoadState): Boolean = loadState is LoadState.Loading || loadState is LoadState.Error
+    open fun displayLoadStateAsItem(loadState: LoadState): Boolean =
+        loadState is LoadState.Loading || loadState is LoadState.Error
 }
 
 fun <T : Any> SavedStateHandle.saveAsJson(it: T, name: String) {
@@ -478,8 +555,12 @@ fun <T : Any> SavedStateHandle.loadForJson(name: String, def: () -> T?): T? {
 open class LoadState : Parcelable {
     @Parcelize
     class NotLoading(val endOfPaginationReached: Boolean) : LoadState() {
-        override fun toString(): String = "NotLoading(endOfPaginationReached=$endOfPaginationReached)"
-        override fun equals(other: Any?): Boolean = other is NotLoading && endOfPaginationReached == other.endOfPaginationReached
+        override fun toString(): String =
+            "NotLoading(endOfPaginationReached=$endOfPaginationReached)"
+
+        override fun equals(other: Any?): Boolean =
+            other is NotLoading && endOfPaginationReached == other.endOfPaginationReached
+
         override fun hashCode(): Int = endOfPaginationReached.hashCode()
 
         internal companion object {
@@ -501,7 +582,11 @@ open class LoadState : Parcelable {
     }
 }
 
-class Paging<K : Any, V : Any>(private val handle: SavedStateHandle, private val k: K?, factory: () -> PagingSource<K, V>) {
+class Paging<K : Any, V : Any>(
+    private val handle: SavedStateHandle,
+    private val k: K?,
+    factory: () -> PagingSource<K, V>
+) {
     private var key: K?
         get() = if (handle.contains("key")) handle["key"] else k
         set(value) = handle.set("key", value)
@@ -535,30 +620,8 @@ class Paging<K : Any, V : Any>(private val handle: SavedStateHandle, private val
     }
 }
 
-class RoundedBackgroundColorSpan(private val backgroundColor: Int) : ReplacementSpan() {
-    private val linePadding = 2f // play around with these as needed
-    private val sidePadding = 5f // play around with these as needed
-    private fun measureText(paint: Paint, text: CharSequence, start: Int, end: Int): Float =
-        paint.measureText(text, start, end)
-
-    override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, p4: Paint.FontMetricsInt?): Int =
-        (measureText(paint, text, start, end) + (2 * sidePadding)).roundToInt()
-
-    override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
-        val rect = RectF(
-            x, y + paint.fontMetrics.top - linePadding,
-            x + getSize(paint, text, start, end, paint.fontMetricsInt),
-            y + paint.fontMetrics.bottom + linePadding
-        )
-        paint.color = backgroundColor
-        canvas.drawRoundRect(rect, 5F, 5F, paint)
-        paint.color = 0xFFFFFFFF.toInt()
-        canvas.drawText(text, start, end, x + sidePadding, y * 1F, paint)
-    }
-
-}
-
-class TagClickableSpan<T>(private val tag: T, private val call: ((T) -> Unit)? = null) : ClickableSpan() {
+class TagClickableSpan<T>(private val tag: T, private val call: ((T) -> Unit)? = null) :
+    ClickableSpan() {
     override fun onClick(widget: View) {
         call?.invoke(tag)
     }
@@ -569,15 +632,29 @@ class TagClickableSpan<T>(private val tag: T, private val call: ((T) -> Unit)? =
     }
 }
 
-fun <T> List<T>.spannable(separator: CharSequence = " ", string: (T) -> String = { "$it" }, call: ((T) -> Unit)?): SpannableStringBuilder {
+fun <T> List<T>.spannable(
+    separator: CharSequence = " ",
+    string: (T) -> String = { "$it" },
+    call: ((T) -> Unit)?
+): SpannableStringBuilder {
 
     val tags = this.joinToString(separator) { string(it) }
     val span = SpannableStringBuilder(tags)
     fold(0) { i, it ->
         val p = tags.indexOf(string(it), i)
         val e = p + string(it).length
-        if (call != null) span.setSpan(TagClickableSpan(it, call), p, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        span.setSpan(RoundedBackgroundColorSpan(randomColor(0xBF)), p, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (call != null) span.setSpan(
+            TagClickableSpan(it, call),
+            p,
+            e,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        span.setSpan(
+            RoundedBackgroundColorSpan(randomColor(0xBF)),
+            p,
+            e,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
         e
     }
     return span
@@ -627,174 +704,12 @@ fun RecyclerView.loading(last: Int = 1, call: () -> Unit) {
     })
 }
 
-open class SwipeFinishActivity : AppCompatActivity() {
-    @Deprecated("Disable super setContentView", ReplaceWith("super.setContentView(layoutResID)", "io.github.yueeng.hacg.SwipeFinishActivity"))
-    override fun setContentView(layoutResID: Int) {
-        super.setContentView(layoutResID)
-    }
-
-    @Deprecated("Disable super setContentView", ReplaceWith("super.setContentView(layoutResID)", "io.github.yueeng.hacg.SwipeFinishActivity"))
-    override fun setContentView(view: View?) {
-        super.setContentView(view)
-    }
-
-    @Deprecated("Disable super setContentView", ReplaceWith("super.setContentView(layoutResID)", "io.github.yueeng.hacg.SwipeFinishActivity"))
-    override fun setContentView(view: View?, params: ViewGroup.LayoutParams?) {
-        super.setContentView(view, params)
-    }
-
-    fun setContentView(layout: Int, callback: (View) -> Unit) {
-        setContentView(layoutInflater.inflate(layout, null), callback)
-    }
-
-    fun setContentView(layout: View, callback: (View) -> Unit) {
-        super.setContentView(R.layout.activity_swipeback)
-        val pager = super.findViewById<ViewPager2>(R.id.swipe_host)
-        pager.adapter = SwipeBackAdapter(layout, callback)
-        pager.offscreenPageLimit = 2
-        pager.setCurrentItem(1, false)
-        pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            var pos = -1
-
-            override fun onPageSelected(position: Int) {
-                pos = position
-            }
-
-            override fun onPageScrollStateChanged(state: Int) {
-                if (state != ViewPager2.SCROLL_STATE_IDLE || pos != 0) return
-                finish()
-                if (Build.VERSION.SDK_INT >= 34) {
-                    overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
-                } else {
-                    @Suppress("DEPRECATION") overridePendingTransition(0, 0)
-                }
-            }
-        })
-    }
-
-    override fun <T : View?> findViewById(id: Int): T? {
-        val pager = super.findViewById<ViewPager2>(R.id.swipe_host)?.children?.firstOrNull() as? RecyclerView
-        val holder = pager?.findViewHolderForLayoutPosition(1)
-        return holder?.itemView?.findViewById<T>(id)
-    }
-
-    class SwipeBackHolder(view: View) : RecyclerView.ViewHolder(view)
-
-    class SwipeBackAdapter(private val layout: View, private val callback: (View) -> Unit) : RecyclerView.Adapter<SwipeBackHolder>() {
-        override fun getItemViewType(position: Int): Int = when (position) {
-            0 -> 0
-            1 -> 1
-            else -> throw IllegalArgumentException("Position $position is not supported")
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SwipeBackHolder = when (viewType) {
-            0 -> SwipeBackHolder(LayoutInflater.from(parent.context).inflate(R.layout.swipeback_start, parent, false))
-            1 -> LayoutInflater.from(parent.context).let { inflater ->
-                val host = inflater.inflate(R.layout.swipeback_container, parent, false) as ViewGroup
-                host.addView(layout)
-                SwipeBackHolder(host)
-            }
-
-            else -> throw IllegalArgumentException("ViewType $viewType is not supported")
-        }
-
-
-        override fun onBindViewHolder(holder: SwipeBackHolder, position: Int) {
-            if (position == 1) holder.itemView.post { callback(holder.itemView) }
-        }
-
-        override fun getItemCount(): Int = 2
-    }
-
-}
-
-/**
- * Layout to wrap a scrollable component inside a ViewPager2. Provided as a solution to the problem
- * where pages of ViewPager2 have nested scrollable elements that scroll in the same direction as
- * ViewPager2. The scrollable element needs to be the immediate and only child of this host layout.
- *
- * This solution has limitations when using multiple levels of nested scrollable elements
- * (e.g. a horizontal RecyclerView in a vertical RecyclerView in a horizontal ViewPager2).
- */
-class NestedScrollableHost : FrameLayout {
-    constructor(context: Context) : super(context)
-    constructor(context: Context, attrs: AttributeSet?) : super(context, attrs)
-
-    private var touchSlop = 0
-    private var initialX = 0f
-    private var initialY = 0f
-    private val parentViewPager: ViewPager2?
-        get() {
-            var v: View? = parent as? View
-            while (v != null && v !is ViewPager2) {
-                v = v.parent as? View
-            }
-            return v as? ViewPager2
-        }
-
-    init {
-        touchSlop = ViewConfiguration.get(context).scaledTouchSlop
-    }
-
-    private fun canChildScroll(orientation: Int, delta: Float): Boolean {
-        val direction = -delta.sign.toInt()
-        return when (orientation) {
-            0 -> descendants.any { it.canScrollHorizontally(direction) }
-            1 -> descendants.any { it.canScrollVertically(direction) }
-            else -> throw IllegalArgumentException()
-        }
-    }
-
-    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
-        handleInterceptTouchEvent(e)
-        return super.onInterceptTouchEvent(e)
-    }
-
-    private fun handleInterceptTouchEvent(e: MotionEvent) {
-        val orientation = parentViewPager?.orientation ?: return
-
-        // Early return if child can't scroll in same direction as parent
-        if (!canChildScroll(orientation, -1f) && !canChildScroll(orientation, 1f)) {
-            return
-        }
-
-        if (e.action == MotionEvent.ACTION_DOWN) {
-            initialX = e.x
-            initialY = e.y
-            parent.requestDisallowInterceptTouchEvent(true)
-        } else if (e.action == MotionEvent.ACTION_MOVE) {
-            val dx = e.x - initialX
-            val dy = e.y - initialY
-            val isVpHorizontal = orientation == ViewPager2.ORIENTATION_HORIZONTAL
-
-            // assuming ViewPager2 touch-slop is 2x touch-slop of child
-            val scaledDx = dx.absoluteValue * if (isVpHorizontal) .5f else 1f
-            val scaledDy = dy.absoluteValue * if (isVpHorizontal) 1f else .5f
-
-            if (scaledDx > touchSlop || scaledDy > touchSlop) {
-                if (isVpHorizontal == (scaledDy > scaledDx)) {
-                    // Gesture is perpendicular, allow all parents to intercept
-                    parent.requestDisallowInterceptTouchEvent(false)
-                } else {
-                    // Gesture is parallel, query child if movement in that direction is possible
-                    if (canChildScroll(orientation, if (isVpHorizontal) dx else dy)) {
-                        // Child can scroll, disallow all parents to intercept
-                        parent.requestDisallowInterceptTouchEvent(true)
-                    } else {
-                        // Child cannot scroll, allow all parents to intercept
-                        parent.requestDisallowInterceptTouchEvent(false)
-                    }
-                }
-            }
-        }
-    }
-}
-
 class HacgPermissionFragment : Fragment() {
     private lateinit var callback: (Map<String, Boolean>) -> Unit
-    private val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        callback.invoke(permissions)
-    }
+    private val requestPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            callback.invoke(permissions)
+        }
 
     fun request(vararg permissions: String, call: (Map<String, Boolean>) -> Unit) {
         callback = call
@@ -822,9 +737,16 @@ class HacgPermission(val fragmentManager: FragmentManager) {
         }
 
         fun Activity.showRequestPermissionRationale(permission: String) =
-            !isPermissionGranted(permission) && ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
+            !isPermissionGranted(permission) && ActivityCompat.shouldShowRequestPermissionRationale(
+                this,
+                permission
+            )
 
-        fun HacgPermission.checkPermissions(activity: Activity, vararg permission: String, granted: () -> Unit) = activity.run {
+        fun HacgPermission.checkPermissions(
+            activity: Activity,
+            vararg permission: String,
+            granted: () -> Unit
+        ) = activity.run {
             if (isPermissionGranted(*permission)) {
                 granted()
                 return@run
@@ -833,12 +755,22 @@ class HacgPermission(val fragmentManager: FragmentManager) {
                 if (permissions.all { it.value }) granted()
                 else {
                     val message = permissions.filter { !it.value }
-                        .map { packageManager.getPermissionInfo(it.key, PackageManager.GET_META_DATA) }
+                        .map {
+                            packageManager.getPermissionInfo(
+                                it.key,
+                                PackageManager.GET_META_DATA
+                            )
+                        }
                         .mapNotNull { it.loadDescription(packageManager) }
                         .joinToString(",")
                     activity.snack(message, Snackbar.LENGTH_LONG)
                         .setAction(R.string.app_settings) {
-                            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                            startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:$packageName")
+                                )
+                            )
                         }.show()
                 }
             }
@@ -852,12 +784,18 @@ class HacgPermission(val fragmentManager: FragmentManager) {
     }
 }
 
-inline fun <reified T> Bundle.getParcelableCompat(key: String): T? = BundleCompat.getParcelable(this, key, T::class.java)
+inline fun <reified T> Bundle.getParcelableCompat(key: String): T? =
+    BundleCompat.getParcelable(this, key, T::class.java)
 
-inline fun <reified T> Intent.getParcelableExtraCompat(key: String): T? = IntentCompat.getParcelableExtra(this, key, T::class.java)
+inline fun <reified T> Intent.getParcelableExtraCompat(key: String): T? =
+    IntentCompat.getParcelableExtra(this, key, T::class.java)
 
 inline fun <reified T : Serializable> Intent.getSerializableExtraCompat(key: String): T? = when {
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> getSerializableExtra(key, T::class.java)
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> getSerializableExtra(
+        key,
+        T::class.java
+    )
+
     else -> @Suppress("DEPRECATION") getSerializableExtra(key) as? T?
 }
 
@@ -867,7 +805,10 @@ fun OnBackPressedDispatcher.bubbleOnBackPressed(callback: OnBackPressedCallback)
     callback.isEnabled = true
 }
 
-fun ComponentActivity.addOnBackPressedCallback(owner: LifecycleOwner? = this, callback: OnBackPressedCallback.() -> Boolean): OnBackPressedCallback = onBackPressedDispatcher.addCallback(owner) {
+fun ComponentActivity.addOnBackPressedCallback(
+    owner: LifecycleOwner? = this,
+    callback: OnBackPressedCallback.() -> Boolean
+): OnBackPressedCallback = onBackPressedDispatcher.addCallback(owner) {
     if (callback(this)) return@addCallback
     onBackPressedDispatcher.bubbleOnBackPressed(this)
 }

@@ -1,5 +1,3 @@
-import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,33 +7,27 @@ plugins {
 
 android {
     namespace = "io.github.yueeng.hacg"
-    compileSdk = 34
-    buildToolsVersion = "34.0.0"
+    compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "io.github.yueeng.hacg"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 42
         versionName = "1.5.6"
         resourceConfigurations.add("zh-rCN")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    signingConfigs {
-        create("release") {
-            val config = gradleLocalProperties(rootDir, providers)
-            storeFile = file(config.getProperty("storeFile"))
-            storePassword = config.getProperty("storePassword")
-            keyAlias = config.getProperty("keyAlias")
-            keyPassword = config.getProperty("keyPassword")
-        }
-    }
     buildTypes {
         getByName("release") {
+            applicationIdSuffix = ".shihcheeng"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            applicationIdSuffix = ".dev"
         }
     }
     buildFeatures {
@@ -54,18 +46,19 @@ android {
         outputs.all {
             project.tasks.getByName("assembleRelease").doLast {
                 val folder = File(rootDir, "release").also { it.mkdirs() }
-                outputFile.parentFile?.listFiles()?.forEach { it.copyTo(File(folder, it.name), true) }
+                outputFile.parentFile?.listFiles()
+                    ?.forEach { it.copyTo(File(folder, it.name), true) }
             }
         }
     }
 }
 
 dependencies {
-    val lifecycleVersion = "2.8.6"
+    val lifecycleVersion = "2.8.7"
     val glideVersion = "4.16.0"
     val okhttpVersion = "4.12.0"
     val kotlinxCoroutinesVersion = "1.9.0"
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
@@ -73,12 +66,12 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.slidingpanelayout:slidingpanelayout:1.2.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.activity:activity-ktx:1.9.3")
-    implementation("androidx.fragment:fragment-ktx:1.8.4")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycleVersion")
-    implementation("androidx.paging:paging-runtime-ktx:3.3.2")
+    implementation("androidx.paging:paging-runtime-ktx:3.3.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinxCoroutinesVersion")
     implementation("com.github.clans:fab:1.6.4")

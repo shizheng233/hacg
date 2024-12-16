@@ -27,9 +27,12 @@
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <LinearLayout
+        android:id="@+id/bottom_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?android:colorBackground"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
         android:orientation="horizontal"
         android:theme="@style/ThemeOverlay.MaterialComponents.Dark">
 

@@ -9,7 +9,7 @@
     android:layout_marginEnd="5dp"
     android:layout_marginBottom="3dp"
     android:descendantFocusability="blocksDescendants"
-    tools:context=".InfoCommentFragment">
+    tools:context=".fragment.InfoCommentFragment">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -19,7 +19,7 @@
             android:id="@+id/view1"
             android:layout_width="3dp"
             android:layout_height="0dp"
-            android:background="@color/text_color_summary"
+            android:background="?colorSurfaceDim"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -40,7 +40,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="5dp"
             android:layout_weight="1"
-            android:textColor="@color/text_color_title"
+            android:textColor="?colorOnSurface"
             android:textSize="@dimen/text_size_title"
             app:layout_constraintEnd_toStartOf="@id/button2"
             app:layout_constraintStart_toEndOf="@+id/image1"
@@ -51,7 +51,7 @@
             android:id="@+id/text3"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_color_summary"
+            android:textColor="?colorOnSurfaceVariant"
             android:textSize="@dimen/text_size_summary"
             app:layout_constraintEnd_toStartOf="@id/button2"
             app:layout_constraintStart_toStartOf="@+id/text1"
@@ -62,7 +62,7 @@
             android:id="@+id/text2"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_color_content"
+            android:textColor="?colorOnSurface"
             android:textSize="@dimen/text_size_content"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="@+id/text1"
@@ -83,7 +83,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="5dp"
-            android:textColor="@color/text_color_summary"
+            android:textColor="?colorOnSurfaceVariant"
             android:textSize="@dimen/text_size_summary"
             app:layout_constraintBottom_toBottomOf="@+id/button1"
             app:layout_constraintEnd_toStartOf="@+id/button1"

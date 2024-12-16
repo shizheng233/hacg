@@ -1,6 +1,6 @@
 @file:Suppress("MayBeConstant", "unused", "MemberVisibilityCanBePrivate", "PropertyName")
 
-package io.github.yueeng.hacg
+package io.github.yueeng.hacg.utils
 
 import android.app.Activity
 import android.content.ContentResolver
@@ -13,6 +13,9 @@ import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.gson.annotations.SerializedName
+import io.github.yueeng.hacg.BuildConfig
+import io.github.yueeng.hacg.HAcgApplication
+import io.github.yueeng.hacg.R
 import io.github.yueeng.hacg.databinding.AlertHostBinding
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
@@ -70,16 +73,17 @@ object HAcg {
         "/wp/bbs"
     }
 
-    private val config = PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance).also { c ->
-        val avc = "app.version.code"
-        if (c.getInt(avc, 0) < BuildConfig.VERSION_CODE) {
-            c.edit().remove(SYSTEM_HOST)
-                .remove(SYSTEM_HOSTS)
-                .putInt(avc, BuildConfig.VERSION_CODE)
-                .apply()
-            configFile.delete()
+    private val config =
+        PreferenceManager.getDefaultSharedPreferences(HAcgApplication.instance).also { c ->
+            val avc = "app.version.code"
+            if (c.getInt(avc, 0) < BuildConfig.VERSION_CODE) {
+                c.edit().remove(SYSTEM_HOST)
+                    .remove(SYSTEM_HOSTS)
+                    .putInt(avc, BuildConfig.VERSION_CODE)
+                    .apply()
+                configFile.delete()
+            }
         }
-    }
 
     private var saveHosts: List<String>
         get() = try {
@@ -110,7 +114,8 @@ object HAcg {
         get() = defaultCategory()
 
     suspend fun update(context: Activity, tip: Boolean, updated: () -> Unit) {
-        val html = "https://raw.githubusercontent.com/yueeng/hacg/master/app/src/main/assets/config.json".httpGetAwait()
+        val html =
+            "https://raw.githubusercontent.com/yueeng/hacg/master/app/src/main/assets/config.json".httpGetAwait()
         val config = try {
             gson.fromJson(html?.first, HacgConfig::class.java)
         } catch (_: Exception) {
@@ -118,8 +123,13 @@ object HAcg {
         }
         when {
             config == null -> Unit
-            config.version <= (defaultConfig()?.version ?: 0) -> if (tip) context.toast(R.string.settings_config_newest)
-            else -> context.snack(context.getString(R.string.settings_config_updating), Snackbar.LENGTH_LONG)
+            config.version <= (defaultConfig()?.version
+                ?: 0) -> if (tip) context.toast(R.string.settings_config_newest)
+
+            else -> context.snack(
+                context.getString(R.string.settings_config_updating),
+                Snackbar.LENGTH_LONG
+            )
                 .setAction(R.string.settings_config_update) {
                     runCatching {
                         host = defaultHosts(config).first()
@@ -131,7 +141,7 @@ object HAcg {
     }
 
     val IsHttp: Regex = """^https?://.*$""".toRegex()
-    val RELEASE = "https://github.com/yueeng/hacg/releases"
+    val RELEASE = "https://github.com/shizheng233/hacg/releases"
 
     val web get() = "https://$host"
 
@@ -146,7 +156,15 @@ object HAcg {
     val wpdiscuz
         get() = "$wordpress/wp-content/plugins/wpdiscuz/utils/ajax/wpdiscuz-ajax.php"
 
-    fun setHostEdit(context: Context, title: Int, list: () -> List<String>, cur: () -> String, set: (String) -> Unit, ok: (String) -> Unit, reset: () -> Unit) {
+    fun setHostEdit(
+        context: Context,
+        title: Int,
+        list: () -> List<String>,
+        cur: () -> String,
+        set: (String) -> Unit,
+        ok: (String) -> Unit,
+        reset: () -> Unit
+    ) {
         val view = AlertHostBinding.inflate(LayoutInflater.from(context))
         MaterialAlertDialogBuilder(context)
             .setTitle(title)
@@ -161,14 +179,32 @@ object HAcg {
             .create().show()
     }
 
-    fun setHostList(context: Context, title: Int, list: () -> List<String>, cur: () -> String, set: (String) -> Unit, ok: (String) -> Unit, reset: () -> Unit) {
+    fun setHostList(
+        context: Context,
+        title: Int,
+        list: () -> List<String>,
+        cur: () -> String,
+        set: (String) -> Unit,
+        ok: (String) -> Unit,
+        reset: () -> Unit
+    ) {
         val hosts = list().toList()
         MaterialAlertDialogBuilder(context)
             .setTitle(title)
             .setSingleChoiceItems(hosts.toTypedArray(), hosts.indexOf(cur()).takeIf { it >= 0 }
                 ?: 0, null)
             .setNegativeButton(R.string.app_cancel, null)
-            .setNeutralButton(R.string.settings_host_more) { _, _ -> setHostEdit(context, title, list, cur, set, ok, reset) }
+            .setNeutralButton(R.string.settings_host_more) { _, _ ->
+                setHostEdit(
+                    context,
+                    title,
+                    list,
+                    cur,
+                    set,
+                    ok,
+                    reset
+                )
+            }
             .setPositiveButton(R.string.app_ok) { d, _ -> set(hosts[(d as AlertDialog).listView.checkedItemPosition]) }
             .create().show()
     }
@@ -245,7 +281,8 @@ data class Comment(
                 e.select(">.wpd-comment-wrap .avatar").attr("abs:src"),
                 e.select(">.wpd-comment-wrap .wpd-vote-result").text().toIntOrNull() ?: 0,
                 e.select(">.wpd-comment-wrap .wpd-comment-date").text(),
-                e.select(">.wpd-comment-wrap~.wpd-reply").map { Comment(it, depth + 1) }.toMutableList(),
+                e.select(">.wpd-comment-wrap~.wpd-reply").map { Comment(it, depth + 1) }
+                    .toMutableList(),
                 depth
             )
 }
@@ -319,9 +356,13 @@ data class Article(
 ) : Parcelable {
     companion object {
         val ID: Regex = """post-(\d+)""".toRegex()
-        fun parseID(str: String?) = str?.let { s -> ID.find(s)?.let { it.groups[1]?.value?.toInt() } }
+        fun parseID(str: String?) =
+            str?.let { s -> ID.find(s)?.let { it.groups[1]?.value?.toInt() } }
+
         private val URL: Regex = """/wp/(\d+)\.html""".toRegex()
-        fun getIdFromUrl(str: String?) = str?.let { s -> URL.find(s)?.let { it.groups[1]?.value?.toInt() } }
+        fun getIdFromUrl(str: String?) =
+            str?.let { s -> URL.find(s)?.let { it.groups[1]?.value?.toInt() } }
+
         private val LIST = listOf("/wp/tag/", "/wp/author/", "/wp/?s=")
         fun isList(url: String): Boolean = Uri.parse(url).path?.let { path ->
             HAcg.categories.any { path == it.first } || LIST.any { path.startsWith(it) }
@@ -331,7 +372,8 @@ data class Article(
     constructor(msg: String) : this(0, msg, null, null, null, null, 0, null, null, listOf())
 
     @IgnoredOnParcel
-    private val defimg = "${ContentResolver.SCHEME_ANDROID_RESOURCE}://${this::class.java.`package`!!.name}/drawable/placeholder"
+    private val defimg =
+        "${ContentResolver.SCHEME_ANDROID_RESOURCE}://${this::class.java.`package`!!.name}/drawable/placeholder"
 
     @IgnoredOnParcel
     val img: String

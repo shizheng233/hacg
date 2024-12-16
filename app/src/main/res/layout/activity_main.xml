@@ -5,8 +5,9 @@
     android:id="@+id/coordinator"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="false"
     android:orientation="vertical"
-    tools:context=".MainActivity">
+    tools:context=".activities.MainActivity">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appbar"
@@ -18,7 +19,6 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:layout_collapseMode="pin"
-            app:layout_scrollFlags="scroll|enterAlways|enterAlwaysCollapsed"
             app:logo="@mipmap/ic_launcher_round_icon"
             app:title="@string/app_name"
             tools:menu="@menu/menu_main" />
@@ -27,9 +27,11 @@
             android:id="@+id/tab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            app:layout_collapseMode="pin"
             app:layout_scrollFlags="enterAlways"
-            app:tabIndicatorColor="@color/accent"
+            app:tabIndicatorColor="?colorPrimary"
             app:tabMode="scrollable" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.viewpager2.widget.ViewPager2

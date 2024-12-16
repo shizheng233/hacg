@@ -10,6 +10,7 @@
         android:id="@+id/philosophy"
         android:icon="@drawable/philosophy"
         android:title="@string/app_philosophy"
+        app:iconTint="?colorOnSurface"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/user"
